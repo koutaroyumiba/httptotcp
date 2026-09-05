@@ -44,10 +44,9 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 			n, err := f.Read(data)
 			if err != nil {
 				if err == io.EOF {
-					return
+					break
 				}
 				log.Fatalf("Failed to read from file: %v", err)
-				break
 			}
 
 			parts := strings.Split(string(data[:n]), "\n")
