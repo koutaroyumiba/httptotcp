@@ -26,7 +26,7 @@ func TestHeadersParse(t *testing.T) {
 	assert.Equal(t, 0, n)
 	assert.False(t, done)
 
-	// Test: Many keys
+	// Test: Random capitalisation
 	headers = NewHeaders()
 	data = []byte("HoSt: localhost:8080\r\n\r\n")
 	n, done, err = headers.Parse(data)
@@ -42,5 +42,17 @@ func TestHeadersParse(t *testing.T) {
 	n, done, err = headers.Parse(data)
 	require.Error(t, err)
 	assert.Equal(t, 0, n)
+	assert.False(t, done)
+
+	// Test: Many Keys
+	headers = NewHeaders()
+	data = []byte("Host: localhost:8080\r\nHost:localhost:6969\r\nHost: localhost:6767\r\n\r\n")
+	n1, done, err := headers.Parse(data)
+	n2, done, err := headers.Parse(data[n1:])
+	n3, done, err := headers.Parse(data[n1+n2:])
+	require.NoError(t, err)
+	require.NotNil(t, headers)
+	assert.Equal(t, "localhost:8080, localhost:6969, localhost:6767", headers["host"])
+	assert.Equal(t, 65, n1+n2+n3)
 	assert.False(t, done)
 }

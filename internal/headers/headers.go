@@ -45,8 +45,15 @@ func (h Headers) Parse(data []byte) (int, bool, error) {
 		return read, done, fmt.Errorf("invalid key")
 	}
 
+	key = strings.ToLower(key)
 	read += idx + len(CRLF)
-	h[strings.ToLower(key)] = value
+	old_val, ok := h[key]
+	if !ok {
+		h[key] = value
+	} else {
+		h[key] = fmt.Sprintf("%s, %s", old_val, value)
+	}
+
 	return read, done, nil
 }
 
