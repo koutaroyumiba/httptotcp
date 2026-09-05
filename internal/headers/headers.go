@@ -3,6 +3,7 @@ package headers
 import (
 	"bytes"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -35,11 +36,35 @@ func (h Headers) Parse(data []byte) (int, bool, error) {
 
 	key := string(fieldPair[0])
 	value := strings.TrimSpace(string(fieldPair[1]))
+
 	if len(key) != len(strings.TrimSpace(key)) {
 		return read, done, fmt.Errorf("invalid field format (key spacing)")
 	}
 
+	if !isValidKey(key) {
+		return read, done, fmt.Errorf("invalid key")
+	}
+
 	read += idx + len(CRLF)
-	h[key] = value
+	h[strings.ToLower(key)] = value
 	return read, done, nil
+}
+
+func isValidKey(key string) bool {
+	specialChar := []rune{'!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~'}
+	if len(key) < 1 {
+		return false
+	}
+
+	for _, c := range key {
+		isAlpha := ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
+		isDigit := '0' <= c && c <= '9'
+		isSpecialChar := slices.Contains(specialChar, c)
+
+		if !isAlpha && !isDigit && !isSpecialChar {
+			return false
+		}
+	}
+
+	return true
 }
