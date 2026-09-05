@@ -59,7 +59,7 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 			} else if len(parts) == 1 {
 				currentLine.WriteString(parts[0])
 			} else {
-				log.Fatal("something is wrong?")
+				log.Printf("[warn] something is wrong?\n")
 			}
 		}
 		if currentLine.Len() != 0 {
