@@ -3,3 +3,6 @@ tcp:
 
 udp:
   go run ./cmd/udpsender
+
+test:
+  go test ./...
