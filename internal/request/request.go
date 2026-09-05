@@ -1,6 +1,7 @@
 package request
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -8,8 +9,44 @@ import (
 	"strings"
 )
 
+var CRLF = []byte("\r\n")
+
+type parserState string
+
+const (
+	StateInit parserState = "init"
+	StateDone parserState = "done"
+)
+
 type Request struct {
 	RequestLine RequestLine
+	state       parserState
+}
+
+func (r *Request) parse(data []byte) (int, error) {
+	read := 0
+
+	switch r.state {
+	case StateInit:
+		parsedRequestLine, n, err := parseRequestLine(data)
+		if err != nil {
+			log.Printf("error: %v", err)
+			return read, err
+		}
+
+		if n == 0 {
+			break
+		}
+
+		read += n
+		r.RequestLine = *parsedRequestLine
+		r.state = StateDone
+
+	case StateDone:
+		break
+	}
+
+	return read, nil
 }
 
 type RequestLine struct {
@@ -19,43 +56,64 @@ type RequestLine struct {
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		log.Printf("error: %v", err)
-		return nil, err
+	request := &Request{
+		state: StateInit,
 	}
 
-	splitData := strings.Split(string(data), "\r\n")
-	requestLine, err := parseRequestLine(splitData[0])
-	if err != nil {
-		log.Printf("error: %v", err)
-		return nil, err
+	buffer := make([]byte, 4096)
+	read := 0
+
+	for request.state != StateDone {
+		n, err := reader.Read(buffer[read:])
+		if err != nil {
+			log.Printf("error: %v", err)
+			return nil, err
+		}
+
+		read += n
+		processed, err := request.parse(buffer[:read])
+		if err != nil {
+			log.Printf("error: %v", err)
+			return nil, err
+		}
+
+		copy(buffer, buffer[processed:read])
+		read -= processed
 	}
 
-	return &Request{*requestLine}, nil
+	return request, nil
 }
 
-func parseRequestLine(requestLine string) (*RequestLine, error) {
+func parseRequestLine(data []byte) (*RequestLine, int, error) {
+	idx := bytes.Index(data, CRLF)
+	if idx == -1 {
+		return nil, 0, nil
+	}
+
+	// process
+	requestLine := string(data[:idx])
+	read := idx + len(CRLF)
+
 	splitLine := strings.Split(requestLine, " ")
 	if len(splitLine) != 3 {
-		return nil, fmt.Errorf("length wrong")
+		return nil, read, fmt.Errorf("wrong length %s", splitLine)
 	}
 
 	method := splitLine[0]
 	if !slices.Contains([]string{"GET", "POST", "DELETE", "PUT", "PATCH"}, method) {
-		return nil, fmt.Errorf("bad method")
+		return nil, read, fmt.Errorf("bad method (got %s)", method)
 	}
 
 	requestTarget := splitLine[1]
 
 	version := strings.TrimPrefix(splitLine[2], "HTTP/")
 	if version != "1.1" {
-		return nil, fmt.Errorf("bad http version")
+		return nil, read, fmt.Errorf("bad http version (got %s)", version)
 	}
 
 	return &RequestLine{
 		version,
 		requestTarget,
 		method,
-	}, nil
+	}, read, nil
 }
