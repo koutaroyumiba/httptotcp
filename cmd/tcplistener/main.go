@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net"
-	"strings"
+
+	"github.com/koutaroyumiba/httpfromtcp/internal/request"
 )
 
 func main() {
@@ -22,49 +22,17 @@ func main() {
 		}
 		fmt.Println("Established connection")
 
-		ch := getLinesChannel(conn)
-		for line := range ch {
-			fmt.Printf("read: %s\n", line)
+		rl, err := request.RequestFromReader(conn)
+		if err != nil {
+			log.Fatalf("Failed to read request: %v", err)
 		}
+
+		fmt.Printf("Request line:\n")
+		fmt.Printf("- Method: %s\n", rl.RequestLine.Method)
+		fmt.Printf("- Target: %s\n", rl.RequestLine.RequestTarget)
+		fmt.Printf("- Version: %s\n", rl.RequestLine.HttpVersion)
 
 		fmt.Println("Closing connection...")
 		conn.Close()
 	}
-}
-
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	out := make(chan string, 1)
-
-	go func() {
-		defer close(out)
-		var currentLine strings.Builder
-
-		for {
-			data := make([]byte, 8)
-			n, err := f.Read(data)
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				log.Fatalf("Failed to read from file: %v", err)
-			}
-
-			parts := strings.Split(string(data[:n]), "\n")
-			if len(parts) == 1 {
-				currentLine.WriteString(parts[0])
-			} else {
-				for i := 0; i < len(parts)-1; i++ {
-					out <- fmt.Sprintf("%s%s", currentLine.String(), parts[i])
-					currentLine.Reset()
-					currentLine.WriteString(parts[i+1])
-				}
-			}
-		}
-
-		if currentLine.Len() != 0 {
-			out <- fmt.Sprintf("%s", currentLine.String())
-		}
-	}()
-
-	return out
 }
