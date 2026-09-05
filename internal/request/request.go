@@ -29,7 +29,6 @@ type Request struct {
 
 func (r *Request) parse(data []byte) (int, error) {
 	read := 0
-	fmt.Printf("[%s] data (%s)\n", r.state, data)
 
 	switch r.state {
 	case StateInit:
