@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/koutaroyumiba/httpfromtcp/internal/headers"
@@ -18,16 +19,18 @@ type parserState string
 const (
 	StateInit    parserState = "init"
 	StateHeaders parserState = "headers"
+	StateBody    parserState = "body"
 	StateDone    parserState = "done"
 )
 
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
+	Body        []byte
 	state       parserState
 }
 
-func (r *Request) parse(data []byte) (int, error) {
+func (r *Request) parse(data []byte, readEOF bool) (int, error) {
 	read := 0
 
 	switch r.state {
@@ -54,10 +57,40 @@ func (r *Request) parse(data []byte) (int, error) {
 		}
 
 		if done {
-			r.state = StateDone
+			r.state = StateBody
 		}
 
 		read += n
+
+	case StateBody:
+		lengthStr, ok := r.Headers["content-length"]
+		if !ok {
+			r.state = StateDone
+			break
+		}
+
+		contentLength, err := strconv.Atoi(lengthStr)
+		if err != nil {
+			log.Printf("error: %v", err)
+			return read, err
+		}
+
+		dataLength := len(data)
+		if len(r.Body)+dataLength > contentLength {
+			log.Printf("error: length of body greater than Content-Length\n")
+			return read, fmt.Errorf("length of body greater than Content-Length")
+		}
+
+		r.Body = slices.Concat(r.Body, data)
+		if readEOF && len(r.Body) < contentLength {
+			log.Printf("error: length of body less than Content-Length\n")
+			return read, fmt.Errorf("length of body less than Content-Length")
+		}
+		if readEOF && len(r.Body) == contentLength {
+			r.state = StateDone
+		}
+
+		read += dataLength
 
 	case StateDone:
 		break
@@ -80,18 +113,23 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 	buffer := make([]byte, 4096)
 	read := 0
+	readEOF := false
 
 	for request.state != StateDone {
 		n, err := reader.Read(buffer[read:])
-		if err != nil && err.Error() != "EOF" {
-			log.Printf("(RequestFromReader) [error] %v", err)
-			return nil, err
+		if err != nil {
+			if err.Error() == "EOF" {
+				readEOF = true
+			} else {
+				log.Printf("(RequestFromReader) [error] %v", err)
+				return nil, err
+			}
 		}
 
 		read += n
-		processed, err := request.parse(buffer[:read])
+		processed, err := request.parse(buffer[:read], readEOF)
 		if err != nil {
-			log.Printf("error: %v", err)
+			log.Printf("[parseErr] %v", err)
 			return nil, err
 		}
 
