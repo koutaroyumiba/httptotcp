@@ -7,6 +7,8 @@ import (
 	"log"
 	"slices"
 	"strings"
+
+	"github.com/koutaroyumiba/httpfromtcp/internal/headers"
 )
 
 var CRLF = []byte("\r\n")
@@ -14,17 +16,20 @@ var CRLF = []byte("\r\n")
 type parserState string
 
 const (
-	StateInit parserState = "init"
-	StateDone parserState = "done"
+	StateInit    parserState = "init"
+	StateHeaders parserState = "headers"
+	StateDone    parserState = "done"
 )
 
 type Request struct {
 	RequestLine RequestLine
+	Headers     headers.Headers
 	state       parserState
 }
 
 func (r *Request) parse(data []byte) (int, error) {
 	read := 0
+	fmt.Printf("[%s] data (%s)\n", r.state, data)
 
 	switch r.state {
 	case StateInit:
@@ -40,7 +45,20 @@ func (r *Request) parse(data []byte) (int, error) {
 
 		read += n
 		r.RequestLine = *parsedRequestLine
-		r.state = StateDone
+		r.state = StateHeaders
+
+	case StateHeaders:
+		n, done, err := r.Headers.Parse(data)
+		if err != nil {
+			log.Printf("error: %v", err)
+			return read, err
+		}
+
+		if done {
+			r.state = StateDone
+		}
+
+		read += n
 
 	case StateDone:
 		break
@@ -57,7 +75,8 @@ type RequestLine struct {
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	request := &Request{
-		state: StateInit,
+		Headers: headers.NewHeaders(),
+		state:   StateInit,
 	}
 
 	buffer := make([]byte, 4096)
@@ -65,8 +84,8 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 	for request.state != StateDone {
 		n, err := reader.Read(buffer[read:])
-		if err != nil {
-			log.Printf("error: %v", err)
+		if err != nil && err.Error() != "EOF" {
+			log.Printf("(RequestFromReader) [error] %v", err)
 			return nil, err
 		}
 

@@ -26,6 +26,7 @@ func (h Headers) Parse(data []byte) (int, bool, error) {
 
 	if idx == 0 {
 		done = true
+		read += len(CRLF)
 		return read, done, nil
 	}
 
@@ -42,7 +43,7 @@ func (h Headers) Parse(data []byte) (int, bool, error) {
 	}
 
 	if !isValidKey(key) {
-		return read, done, fmt.Errorf("invalid key")
+		return read, done, fmt.Errorf("invalid key (%s)", key)
 	}
 
 	key = strings.ToLower(key)
