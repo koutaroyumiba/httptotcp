@@ -51,17 +51,17 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 			}
 
 			parts := strings.Split(string(data[:n]), "\n")
-			if len(parts) == 2 {
-				// new line found
-				out <- fmt.Sprintf("%s%s", currentLine.String(), parts[0])
-				currentLine.Reset()
-				currentLine.WriteString(parts[1])
-			} else if len(parts) == 1 {
+			if len(parts) == 1 {
 				currentLine.WriteString(parts[0])
 			} else {
-				log.Printf("[warn] something is wrong?\n")
+				for i := 0; i < len(parts)-1; i++ {
+					out <- fmt.Sprintf("%s%s", currentLine.String(), parts[i])
+					currentLine.Reset()
+					currentLine.WriteString(parts[i+1])
+				}
 			}
 		}
+
 		if currentLine.Len() != 0 {
 			out <- fmt.Sprintf("%s", currentLine.String())
 		}
