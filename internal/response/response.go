@@ -10,19 +10,19 @@ import (
 type StatusCode uint16
 
 const (
-	Ok                  StatusCode = 200
-	BadRequest          StatusCode = 400
-	InternalServerError StatusCode = 500
+	StatusOk                  StatusCode = 200
+	StatusBadRequest          StatusCode = 400
+	StatusInternalServerError StatusCode = 500
 )
 
 func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
 	reason := ""
 	switch statusCode {
-	case Ok:
+	case StatusOk:
 		reason = "OK"
-	case BadRequest:
+	case StatusBadRequest:
 		reason = "Bad Request"
-	case InternalServerError:
+	case StatusInternalServerError:
 		reason = "InternalServerError"
 	}
 

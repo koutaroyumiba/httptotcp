@@ -66,7 +66,7 @@ func (s *Server) handle(conn net.Conn) {
 	// if err != nil {
 	// 	log.Printf("error writing to the conn: %v", err)
 	// }
-	response.WriteStatusLine(conn, 200)
+	response.WriteStatusLine(conn, response.StatusOk)
 	h := response.GetDefaultHeaders(0)
 	response.WriteHeaders(conn, h)
 }
