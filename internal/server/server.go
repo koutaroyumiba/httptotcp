@@ -35,7 +35,7 @@ func Serve(port uint16, handler Handler) (*Server, error) {
 		Handler:  handler,
 	}
 
-	server.listen()
+	go server.listen()
 
 	return server, nil
 }
@@ -51,24 +51,22 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) listen() {
-	go func() {
-		for {
-			if s.closed {
-				log.Printf("[warn] attempting to connect while server closed")
-				return
-			}
-
-			conn, err := s.Listener.Accept()
-			if err != nil {
-				log.Printf("[error] conn err - %v", err)
-				continue
-			}
-
-			s.handle(conn)
-
-			conn.Close()
+	for {
+		if s.closed {
+			log.Printf("[warn] attempting to connect while server closed")
+			return
 		}
-	}()
+
+		conn, err := s.Listener.Accept()
+		if err != nil {
+			log.Printf("[error] conn err - %v", err)
+			continue
+		}
+
+		s.handle(conn)
+
+		conn.Close()
+	}
 }
 
 func (s *Server) handle(conn net.Conn) {
@@ -94,6 +92,7 @@ func (s *Server) handle(conn net.Conn) {
 	}
 }
 
+// TODO: move this func to be a method of HandlerError
 func WriteErrorResponse(w io.Writer, handlerErr *HandlerError) error {
 	response.WriteStatusLine(w, handlerErr.Code)
 	contentLen := len(handlerErr.Message)
