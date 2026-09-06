@@ -4,6 +4,9 @@ tcp:
 udp:
   go run ./cmd/udpsender
 
+udp-client:
+  nc -u -l 42069
+
 test:
   go test ./...
 
