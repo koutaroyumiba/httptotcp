@@ -30,7 +30,7 @@ type Request struct {
 	state       parserState
 }
 
-func (r *Request) parse(data []byte, readEOF bool) (int, error) {
+func (r *Request) parse(data []byte) (int, error) {
 	read := 0
 
 	switch r.state {
@@ -52,7 +52,7 @@ func (r *Request) parse(data []byte, readEOF bool) (int, error) {
 	case StateHeaders:
 		n, done, err := r.Headers.Parse(data)
 		if err != nil {
-			log.Printf("error: %v", err)
+			log.Printf("[header err] %v", err)
 			return read, err
 		}
 
@@ -75,6 +75,11 @@ func (r *Request) parse(data []byte, readEOF bool) (int, error) {
 			return read, err
 		}
 
+		if contentLength == 0 {
+			r.state = StateDone
+			break
+		}
+
 		dataLength := len(data)
 		if len(r.Body)+dataLength > contentLength {
 			log.Printf("error: length of body greater than Content-Length\n")
@@ -82,12 +87,9 @@ func (r *Request) parse(data []byte, readEOF bool) (int, error) {
 		}
 
 		r.Body = slices.Concat(r.Body, data)
-		if readEOF && len(r.Body) < contentLength {
-			log.Printf("error: length of body less than Content-Length\n")
-			return read, fmt.Errorf("length of body less than Content-Length")
-		}
-		if readEOF && len(r.Body) == contentLength {
+		if len(r.Body) == contentLength {
 			r.state = StateDone
+			break
 		}
 
 		read += dataLength
@@ -111,30 +113,28 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		state:   StateInit,
 	}
 
-	buffer := make([]byte, 4096)
+	buffer := make([]byte, 64)
 	read := 0
-	readEOF := false
 
 	for request.state != StateDone {
 		n, err := reader.Read(buffer[read:])
 		if err != nil {
-			if err.Error() == "EOF" {
-				readEOF = true
-			} else {
-				log.Printf("(RequestFromReader) [error] %v", err)
-				return nil, err
-			}
-		}
-
-		read += n
-		processed, err := request.parse(buffer[:read], readEOF)
-		if err != nil {
-			log.Printf("[parseErr] %v", err)
+			log.Printf("(RequestFromReader) [error] %v\n", err)
 			return nil, err
 		}
 
-		copy(buffer, buffer[processed:read])
-		read -= processed
+		read += n
+		processed := 1
+		for processed != 0 {
+			processed, err = request.parse(buffer[:read])
+			if err != nil {
+				log.Printf("[parseErr] %v", err)
+				return nil, err
+			}
+
+			copy(buffer, buffer[processed:read])
+			read -= processed
+		}
 	}
 
 	return request, nil

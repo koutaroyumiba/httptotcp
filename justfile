@@ -20,3 +20,9 @@ ping-post:
   curl -v -X POST localhost:42069/coffee \
       -H 'Content-Type: application/json' \
       -d '{"type": "dark mode", "size": "medium"}'
+
+ping-400:
+  curl -v localhost:42069/yourproblem
+
+ping-500:
+  curl -v localhost:42069/myproblem

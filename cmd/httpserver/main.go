@@ -1,18 +1,40 @@
 package main
 
 import (
+	"io"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/koutaroyumiba/httpfromtcp/internal/request"
+	"github.com/koutaroyumiba/httpfromtcp/internal/response"
 	"github.com/koutaroyumiba/httpfromtcp/internal/server"
 )
 
 const port = 42069
 
+func customHandler(w io.Writer, r *request.Request) *server.HandlerError {
+	switch r.RequestLine.RequestTarget {
+	case "/yourproblem":
+		return &server.HandlerError{
+			Code:    response.StatusBadRequest,
+			Message: "Your problem is not my problem\n",
+		}
+	case "/myproblem":
+		return &server.HandlerError{
+			Code:    response.StatusInternalServerError,
+			Message: "Woopsie, my bad\n",
+		}
+	default:
+		w.Write([]byte("All good, frfr\n"))
+	}
+
+	return nil
+}
+
 func main() {
-	server, err := server.Serve(port)
+	server, err := server.Serve(port, customHandler)
 	if err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}

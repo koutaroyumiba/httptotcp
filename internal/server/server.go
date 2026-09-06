@@ -1,20 +1,30 @@
 package server
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net"
-	"sync/atomic"
 
+	"github.com/koutaroyumiba/httpfromtcp/internal/request"
 	"github.com/koutaroyumiba/httpfromtcp/internal/response"
 )
 
 type Server struct {
 	Listener net.Listener
-	closed   atomic.Bool
+	Handler  Handler
+	closed   bool
 }
 
-func Serve(port uint16) (*Server, error) {
+type HandlerError struct {
+	Code    response.StatusCode
+	Message string
+}
+
+type Handler func(w io.Writer, req *request.Request) *HandlerError
+
+func Serve(port uint16, handler Handler) (*Server, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err
@@ -22,6 +32,7 @@ func Serve(port uint16) (*Server, error) {
 
 	server := &Server{
 		Listener: listener,
+		Handler:  handler,
 	}
 
 	server.listen()
@@ -35,14 +46,14 @@ func (s *Server) Close() error {
 		return err
 	}
 
-	_ = s.closed.Swap(true)
+	s.closed = true
 	return nil
 }
 
 func (s *Server) listen() {
 	go func() {
 		for {
-			if s.closed.Load() {
+			if s.closed {
 				log.Printf("[warn] attempting to connect while server closed")
 				return
 			}
@@ -61,12 +72,34 @@ func (s *Server) listen() {
 }
 
 func (s *Server) handle(conn net.Conn) {
-	// res := []byte("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nHello World!\n")
-	// _, err := conn.Write(res)
-	// if err != nil {
-	// 	log.Printf("error writing to the conn: %v", err)
-	// }
+	r, err := request.RequestFromReader(conn)
+	if err != nil {
+		log.Fatalf("[ERROR] something went horrible: %v", err)
+	}
+
+	buffer := bytes.NewBuffer([]byte{})
+	handlerErr := s.Handler(buffer, r)
+	if handlerErr != nil {
+		WriteErrorResponse(conn, handlerErr)
+		return
+	}
+
+	body := buffer.Bytes()
 	response.WriteStatusLine(conn, response.StatusOk)
-	h := response.GetDefaultHeaders(0)
+	h := response.GetDefaultHeaders(len(body))
 	response.WriteHeaders(conn, h)
+	_, err = conn.Write(body)
+	if err != nil {
+		log.Fatalf("what happened here... %v", err)
+	}
+}
+
+func WriteErrorResponse(w io.Writer, handlerErr *HandlerError) error {
+	response.WriteStatusLine(w, handlerErr.Code)
+	contentLen := len(handlerErr.Message)
+	h := response.GetDefaultHeaders(contentLen)
+	response.WriteHeaders(w, h)
+
+	_, err := w.Write([]byte(handlerErr.Message))
+	return err
 }
