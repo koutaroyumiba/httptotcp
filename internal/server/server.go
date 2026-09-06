@@ -35,6 +35,7 @@ func (s *Server) Close() error {
 		return err
 	}
 
+	_ = s.closed.Swap(true)
 	return nil
 }
 
