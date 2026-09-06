@@ -15,6 +15,21 @@ func NewHeaders() Headers {
 	return make(Headers)
 }
 
+func (h Headers) Get(key string) (string, bool) {
+	value, ok := h[strings.ToLower(key)]
+	return value, ok
+}
+
+func (h Headers) Set(key string, value string) {
+	key = strings.ToLower(key)
+	old_val, ok := h[key]
+	if !ok {
+		h[key] = value
+	} else {
+		h[key] = fmt.Sprintf("%s, %s", old_val, value)
+	}
+}
+
 func (h Headers) Parse(data []byte) (int, bool, error) {
 	read := 0
 	done := false
@@ -46,14 +61,8 @@ func (h Headers) Parse(data []byte) (int, bool, error) {
 		return read, done, fmt.Errorf("invalid key (%s)", key)
 	}
 
-	key = strings.ToLower(key)
 	read += idx + len(CRLF)
-	old_val, ok := h[key]
-	if !ok {
-		h[key] = value
-	} else {
-		h[key] = fmt.Sprintf("%s, %s", old_val, value)
-	}
+	h.Set(key, value)
 
 	return read, done, nil
 }
