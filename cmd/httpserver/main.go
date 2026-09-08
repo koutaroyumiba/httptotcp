@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -14,21 +13,61 @@ import (
 
 const port = 42069
 
-func customHandler(w io.Writer, r *request.Request) *server.HandlerError {
+func get400() string {
+	return `<html>
+  <head>
+    <title>400 Bad Request</title>
+  </head>
+  <body>
+    <h1>Bad Request</h1>
+    <p>Your request honestly kinda sucked.</p>
+  </body>
+</html>`
+}
+
+func get500() string {
+	return `<html>
+  <head>
+    <title>500 Internal Server Error</title>
+  </head>
+  <body>
+    <h1>Internal Server Error</h1>
+    <p>Okay, you know what? This one is on me.</p>
+  </body>
+</html>`
+}
+
+func get200() string {
+	return `<html>
+  <head>
+    <title>200 OK</title>
+  </head>
+  <body>
+    <h1>Success!</h1>
+    <p>Your request was an absolute banger.</p>
+  </body>
+</html>`
+}
+
+func customHandler(w *response.Writer, r *request.Request) *server.HandlerError {
+	responseStatus := response.StatusOk
+	responseHeaders := response.GetDefaultHeaders(0)
+	responseBody := get200()
+
 	switch r.RequestLine.RequestTarget {
 	case "/yourproblem":
-		return &server.HandlerError{
-			Code:    response.StatusBadRequest,
-			Message: "Your problem is not my problem\n",
-		}
+		responseStatus = response.StatusBadRequest
+		responseBody = get400()
 	case "/myproblem":
-		return &server.HandlerError{
-			Code:    response.StatusInternalServerError,
-			Message: "Woopsie, my bad\n",
-		}
-	default:
-		w.Write([]byte("All good, frfr\n"))
+		responseStatus = response.StatusInternalServerError
+		responseBody = get500()
 	}
+
+	w.WriteStatusLine(responseStatus)
+	responseHeaders.Replace("content-type", "text/html")
+	responseHeaders.Replace("content-length", string(len(responseBody)))
+	w.WriteHeaders(responseHeaders)
+	w.WriteBody([]byte(responseBody))
 
 	return nil
 }

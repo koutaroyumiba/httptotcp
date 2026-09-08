@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net"
 
@@ -22,7 +20,22 @@ type HandlerError struct {
 	Message string
 }
 
-type Handler func(w io.Writer, req *request.Request) *HandlerError
+func (h HandlerError) Write(w *response.Writer) error {
+	if w.GetState() != response.Statusline {
+		log.Printf("[HandlerErr] writer not in proper state: %s - %s", w.GetState(), h.Message)
+		return fmt.Errorf("[HandlerErr] writer not in proper state: %s", w.GetState())
+	}
+	w.WriteStatusLine(h.Code)
+
+	contentLen := len(h.Message)
+	headers := response.GetDefaultHeaders(contentLen)
+	w.WriteHeaders(headers)
+
+	_, err := w.WriteBody([]byte(h.Message))
+	return err
+}
+
+type Handler func(w *response.Writer, req *request.Request) *HandlerError
 
 func Serve(port uint16, handler Handler) (*Server, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -75,30 +88,11 @@ func (s *Server) handle(conn net.Conn) {
 		log.Fatalf("[ERROR] something went horrible: %v", err)
 	}
 
-	buffer := bytes.NewBuffer([]byte{})
-	handlerErr := s.Handler(buffer, r)
+	writer := response.NewResponseWriter(conn)
+	handlerErr := s.Handler(writer, r)
+
 	if handlerErr != nil {
-		WriteErrorResponse(conn, handlerErr)
+		handlerErr.Write(writer)
 		return
 	}
-
-	body := buffer.Bytes()
-	response.WriteStatusLine(conn, response.StatusOk)
-	h := response.GetDefaultHeaders(len(body))
-	response.WriteHeaders(conn, h)
-	_, err = conn.Write(body)
-	if err != nil {
-		log.Fatalf("what happened here... %v", err)
-	}
-}
-
-// TODO: move this func to be a method of HandlerError
-func WriteErrorResponse(w io.Writer, handlerErr *HandlerError) error {
-	response.WriteStatusLine(w, handlerErr.Code)
-	contentLen := len(handlerErr.Message)
-	h := response.GetDefaultHeaders(contentLen)
-	response.WriteHeaders(w, h)
-
-	_, err := w.Write([]byte(handlerErr.Message))
-	return err
 }

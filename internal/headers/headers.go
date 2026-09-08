@@ -30,6 +30,11 @@ func (h Headers) Set(key string, value string) {
 	}
 }
 
+func (h Headers) Replace(key string, value string) {
+	key = strings.ToLower(key)
+	h[key] = value
+}
+
 func (h Headers) Parse(data []byte) (int, bool, error) {
 	read := 0
 	done := false

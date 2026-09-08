@@ -113,7 +113,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		state:   StateInit,
 	}
 
-	buffer := make([]byte, 64)
+	buffer := make([]byte, 4096)
 	read := 0
 
 	for request.state != StateDone {
